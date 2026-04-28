@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>One Million Checkbox</title>
+
+     <script src="/socket.io/socket.io.js"></script>
+
+     <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+     <h1>One Million Checkbox (MVP)</h1>
+     <div id="grid"></div>
+
+     <script>
+         
+         const socket = io();
+
+          window.addEventListener('load', async () => {
+               try {
+                    const res = await fetch('/init', { method: 'GET' });
+                    const data = await res.json();
+                    const container = document.getElementById('grid');
+
+                    // Use a DocumentFragment for better performance with large sets
+                    const fragment = document.createDocumentFragment();
+
+                    data.forEach((value, idx) => {
+                         const label = document.createElement('label');
+                         label.className = 'cb-wrapper';
+
+                         const input = document.createElement('input');
+                         input.type = 'checkbox';
+                         input.id = `checkbox-${idx}`;
+                         input.checked = value;
+
+                         const span = document.createElement('span');
+                         span.className = 'checkmark';
+
+                         input.addEventListener('change', (e) => {
+                              const checked = e.target.checked;
+                              socket.emit('client:toggle', { idx, checked });
+                         });
+
+                         label.appendChild(input);
+                         label.appendChild(span);
+                         fragment.appendChild(label);
+                    });
+
+                    container.appendChild(fragment);
+               } catch (err) {
+                    console.error("Failed to initialize checkboxes:", err);
+               }
+          });
+
+          socket.on('server:update', ({ idx, checked }) => {
+               const checkbox = document.getElementById(`checkbox-${idx}`);
+               if (checkbox) checkbox.checked = checked;
+          });
+
+          socket.on('rate_limit_exceeded', () => {
+               alert("You're doing that too much. Please wait a moment.");
+          });
+          
+     </script>
+     
+</body>
+
+</html>
