@@ -1,46 +1,163 @@
-body {
-     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+/* --- Global Reset & Variables --- */
+:root {
+     --bg-color: #0f172a;
+     --card-bg: #1e293b;
+     --primary-color: #38bdf8;
+     --primary-hover: #0ea5e9;
+     --text-main: #f8fafc;
+     --text-muted: #94a3b8;
+     --checkbox-bg: #334155;
+     --checkbox-checked: #38bdf8;
+     --transition: all 0.2s ease;
+}
+
+* {
+     box-sizing: border-box;
      margin: 0;
-     padding: 20px;
-     background-color: #0f172a;
-     /* Dark sleek background */
-     color: #f8fafc;
+     padding: 0;
+}
+
+body {
+     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+     background-color: var(--bg-color);
+     color: var(--text-main);
      display: flex;
      flex-direction: column;
      align-items: center;
+     padding: 2rem;
+     min-height: 100vh;
 }
 
+/* --- Typography & Header --- */
 h1 {
-     font-weight: 700;
-     letter-spacing: -1px;
-     margin-bottom: 30px;
+     font-size: 2.5rem;
+     font-weight: 800;
+     margin-bottom: 1.5rem;
      background: linear-gradient(90deg, #38bdf8, #818cf8);
-    
+     background-clip: text;
+     -webkit-text-fill-color: transparent;
+     text-align: center;
 }
 
+/* --- Buttons --- */
+button {
+     padding: 0.6rem 1.2rem;
+     font-size: 0.9rem;
+     font-weight: 600;
+     border-radius: 8px;
+     border: none;
+     cursor: pointer;
+     transition: var(--transition);
+     margin: 0 0.5rem 2rem 0.5rem;
+     background-color: var(--card-bg);
+     color: var(--text-main);
+     border: 1px solid #334155;
+}
+
+button:hover {
+     background-color: #334155;
+     transform: translateY(-1px);
+}
+
+/* MODAL BACKDROP */
+.modal {
+     position: fixed;
+     top: 0;
+     left: 0;
+     width: 100%;
+     height: 100%;
+     background: rgba(0, 0, 0, 0.6);
+     backdrop-filter: blur(6px);
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     z-index: 1000;
+}
+
+/* HIDDEN */
+.hidden {
+     display: none;
+}
+
+/* MODAL BOX */
+.modal-box {
+     background: #0f172a;
+     padding: 25px;
+     border-radius: 12px;
+     width: 300px;
+     text-align: center;
+     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* TITLE */
+.modal-box h2 {
+     margin-bottom: 10px;
+     color: #38bdf8;
+}
+
+/* TEXT */
+.modal-box p {
+     margin-bottom: 20px;
+     color: #cbd5f5;
+}
+
+/* BUTTONS */
+.modal-actions {
+     display: flex;
+     justify-content: space-between;
+}
+
+.modal-actions button {
+     flex: 1;
+     margin: 0 5px;
+}
+
+/* Special styling for Login button */
+button[onclick="login()"] {
+     background-color: var(--primary-color);
+     color: #000;
+     border: none;
+}
+
+button[onclick="login()"]:hover {
+     background-color: var(--primary-hover);
+     box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+}
+
+/* --- The Grid Container --- */
 #grid {
      display: grid;
-     /* This creates a responsive grid of squares */
+     /* This creates a fluid grid that fits as many boxes as possible */
      grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
      gap: 6px;
-     width: 95vw;
-     max-width: 1200px;
+     background: var(--card-bg);
      padding: 20px;
-     background: rgba(255, 255, 255, 0.03);
      border-radius: 12px;
-     border: 1px solid rgba(255, 255, 255, 0.1);
-     backdrop-filter: blur(10px);
+     border: 1px solid #334155;
+     max-width: 1000px;
+     width: 100%;
+     margin-top: 1rem;
+     max-height: 70vh;
+     overflow-y: auto;
 }
 
-/* Custom Checkbox Styling */
-.cb-wrapper {
-     display: block;
-     position: relative;
-     width: 24px;
-     height: 24px;
-     cursor: pointer;
+/* Custom Scrollbar for the Grid */
+#grid::-webkit-scrollbar {
+     width: 8px;
 }
 
+#grid::-webkit-scrollbar-track {
+     background: var(--bg-color);
+}
+
+#grid::-webkit-scrollbar-thumb {
+     background: #475569;
+     border-radius: 10px;
+}
+
+/* --- Custom Checkbox Styling --- */
+/* Hide original checkbox */
 .cb-wrapper input {
      position: absolute;
      opacity: 0;
@@ -49,47 +166,55 @@ h1 {
      width: 0;
 }
 
-/* The custom checkbox square */
+.cb-wrapper {
+     display: block;
+     position: relative;
+     cursor: pointer;
+     width: 24px;
+     height: 24px;
+     user-select: none;
+}
+
+/* The custom checkmark box */
 .checkmark {
      position: absolute;
      top: 0;
      left: 0;
      height: 24px;
      width: 24px;
-     background-color: #1e293b;
-     border-radius: 6px;
-     border: 1px solid #334155;
-     transition: all 0.2s ease;
+     background-color: var(--checkbox-bg);
+     border-radius: 4px;
+     transition: var(--transition);
 }
 
-/* On hover */
+/* Hover effect */
 .cb-wrapper:hover input~.checkmark {
-     background-color: #334155;
-     border-color: #38bdf8;
+     background-color: #475569;
 }
 
 /* Checked state */
 .cb-wrapper input:checked~.checkmark {
-     background-color: #38bdf8;
-     border-color: #38bdf8;
-     box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+     background-color: var(--checkbox-checked);
+     box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
 }
 
-/* The checkmark indicator (hidden when not checked) */
+/* The actual check icon (using CSS borders) */
 .checkmark:after {
      content: "";
      position: absolute;
      display: none;
+}
+
+.cb-wrapper input:checked~.checkmark:after {
+     display: block;
+}
+
+.cb-wrapper .checkmark:after {
      left: 8px;
      top: 4px;
      width: 5px;
      height: 10px;
-     border: solid white;
+     border: solid #000;
      border-width: 0 2px 2px 0;
      transform: rotate(45deg);
-}
-
-/* Show the checkmark when checked */
-.cb-wrapper input:checked~.checkmark:after {
-     display: block;
 }

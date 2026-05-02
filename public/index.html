@@ -7,28 +7,217 @@
      <title>One Million Checkbox</title>
 
      <script src="/socket.io/socket.io.js"></script>
-
      <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+
+     <div id="appModal" class="modal hidden">
+          <div class="modal-box">
+               <h2 id="modalTitle"></h2>
+               <p id="modalMessage"></p>
+     
+               <div class="modal-actions" id="modalActions"></div>
+          </div>
+     </div>
+
      <h1>One Million Checkbox (MVP)</h1>
+
+     
+
+     <button onclick="login()">Login</button>
+     <button onclick="logout()">Logout</button>
+
      <div id="grid"></div>
 
      <script>
-         
-         const socket = io();
+          const CLIENT_ID = "ef83eb5dee84c16110473f6149ec6f13";
+          const AUTH_BASE = "https://auth.rayvishal.dev"; 
+          const REDIRECT_URI = window.location.origin;
 
-          window.addEventListener('load', async () => {
+          let socket;
+
+          //  login
+          function login() {
+               const authUrl =
+                    AUTH_BASE + "/oauth/authorize?" +
+                    "client_id=" + CLIENT_ID +
+                    "&redirect_uri=" + REDIRECT_URI +
+                    "&response_type=code";
+
+               window.location.href = authUrl;
+          }
+
+          // logout
+          function logout() {
+               localStorage.removeItem("access_token");
+
+               if (socket) socket.disconnect();
+
+               location.reload();
+          }
+
+          // modal utility
+          function showModal({ title, message, actions = [], autoClose = false }) {
+                    const modal = document.getElementById("appModal");
+                    const titleEl = document.getElementById("modalTitle");
+                    const messageEl = document.getElementById("modalMessage");
+                    const actionsEl = document.getElementById("modalActions");
+
+                    // set content
+                    titleEl.innerText = title;
+                    messageEl.innerText = message;
+
+                    // clear old buttons
+                    actionsEl.innerHTML = "";
+
+                    // create buttons dynamically
+                    actions.forEach(action => {
+                         const btn = document.createElement("button");
+                         btn.innerText = action.label;
+                         btn.onclick = action.onClick;
+                         actionsEl.appendChild(btn);
+                    });
+
+                    // show modal
+                    modal.classList.remove("hidden");
+
+                    // auto close
+                    if (autoClose) {
+                         setTimeout(() => {
+                              closeModal();
+                         }, 2000);
+                    }
+               }
+
+               function closeModal() {
+                    document.getElementById("appModal").classList.add("hidden");
+               }
+
+          // handle OAuth callback
+          async function handleCallback() {
+               const params = new URLSearchParams(window.location.search);
+               const code = params.get("code");
+
+
+               if (!code) return;
+
                try {
-                    const res = await fetch('/init', { method: 'GET' });
-                    const data = await res.json();
-                    const container = document.getElementById('grid');
 
-                    // Use a DocumentFragment for better performance with large sets
+                    // exchange code for token
+                    const res = await fetch(AUTH_BASE + "/oauth/token", {
+                         method: "POST",
+                         headers: {
+                              "Content-Type": "application/x-www-form-urlencoded"
+                         },
+                         body: new URLSearchParams({
+                              grant_type: "authorization_code",
+                              code,
+                              client_id: CLIENT_ID,
+                              redirect_uri: REDIRECT_URI
+                         })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.access_token) {
+                         localStorage.setItem("access_token", data.access_token);
+
+                         // remove ?code from URL
+                         window.history.replaceState({}, document.title, "/");
+
+                         // reload to connect socket with token
+                         location.reload();
+                    }
+
+               } catch (err) {
+                    console.error("AUTH ERROR:", err);
+                    window.history.replaceState({}, document.title, "/");
+               }
+          }
+
+          // connect to socket with auth
+          function connectSocket() {
+               socket = io({
+                    auth: {
+                         token: localStorage.getItem("access_token")
+                    }
+               });
+
+               // listen for updates
+               socket.on('server:update', ({ idx, checked }) => {
+                    const checkbox = document.getElementById(`checkbox-${idx}`);
+                    if (checkbox) checkbox.checked = checked;
+               });
+
+               // rate limit error
+              socket.on('rate_limit_exceeded', () => {
+                    showModal({
+                         title: "Slow Down",
+                         message: "You're clicking too fast. Please wait.",
+                         actions: [],
+                         autoClose: true
+                    });
+               });
+
+               socket.on('error', (msg) => {
+
+                    // revert checkbox visually
+                    const checkbox = document.activeElement;
+                    if (checkbox && checkbox.type === "checkbox") {
+                         checkbox.checked = !checkbox.checked;
+                    }
+
+                    // if login required, show login modal
+                    if (msg === "Login required") {
+                         showModal({
+                              title: "Login Required",
+                              message: "You need to login to interact.",
+                              actions: [
+                                   {
+                                        label: "Login",
+                                        onClick: () => {
+                                             closeModal();
+                                             login();
+                                        }
+                                   },
+                                   {
+                                        label: "Cancel",
+                                        onClick: closeModal
+                                   }
+                              ]
+                         });
+                    } else {
+                         showModal({
+                              title: "Error",
+                              message: msg,
+                              autoClose: true
+                         });
+                    }
+               });
+          }
+
+          // initialize app
+        async function initApp() {
+
+               // handle OAuth callback if present
+               await handleCallback();
+
+               // connect socket
+               connectSocket();
+
+               try {
+
+                    const res = await fetch('/init');
+                    const data = await res.json();
+
+                    const container = document.getElementById('grid');
+                    container.innerHTML = "";
+
                     const fragment = document.createDocumentFragment();
 
                     data.forEach((value, idx) => {
+
                          const label = document.createElement('label');
                          label.className = 'cb-wrapper';
 
@@ -40,9 +229,12 @@
                          const span = document.createElement('span');
                          span.className = 'checkmark';
 
+                         //  send event to backend
                          input.addEventListener('change', (e) => {
-                              const checked = e.target.checked;
-                              socket.emit('client:toggle', { idx, checked });
+                              socket.emit('client:toggle', {
+                                   idx,
+                                   checked: e.target.checked
+                              });
                          });
 
                          label.appendChild(input);
@@ -51,22 +243,16 @@
                     });
 
                     container.appendChild(fragment);
+
                } catch (err) {
-                    console.error("Failed to initialize checkboxes:", err);
+                    console.error("INIT ERROR:", err);
                }
-          });
+          }
 
-          socket.on('server:update', ({ idx, checked }) => {
-               const checkbox = document.getElementById(`checkbox-${idx}`);
-               if (checkbox) checkbox.checked = checked;
-          });
-
-          socket.on('rate_limit_exceeded', () => {
-               alert("You're doing that too much. Please wait a moment.");
-          });
-          
+          // start the app
+          initApp();
      </script>
-     
+
 </body>
 
 </html>

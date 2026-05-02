@@ -4,6 +4,11 @@ import { publisher, subscriber, Redis, rateLimiter } from '../redis-connection.j
 import { Server } from 'socket.io';
 import express from 'express';
 import dotenv from 'dotenv';
+import { authMiddleware } from './auth.middleware.js';
+
+import jwt from "jsonwebtoken";
+import jwkToPem from "jwk-to-pem";
+import axios from "axios";
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,44 +26,51 @@ async function main() {
      const server = createServer(app);
      const io = new Server(server);
 
+     // serve static files
      app.use(express.static('public'));
 
-    
+     // auth middleware for socket.io
+     io.use(authMiddleware);
 
-     const BOX_SIZE = 500;
-     const CHECKBOX_KEY = 'checkbox';
+     const BOX_SIZE = 1000;
+     const CHECKBOX_KEY = 'checkbox1';
 
-     // subscribe to Redis channel for internal updates
+     // subscribe to Redis channel for updates
      await subscriber.subscribe('InternalUpdate');
 
-     //  listen for messages
+     // handle messages from Redis and broadcast to clients
      subscriber.on('message', (channel, message) => {
           if (channel === 'InternalUpdate') {
                const { idx, checked } = JSON.parse(message);
-
                io.emit('server:update', { idx, checked });
           }
      });
 
+     // handle client connections and events
      io.on('connection', (socket) => {
 
+          // handle checkbox toggle from client
           socket.on('client:toggle', async ({ idx, checked }) => {
 
-               const key = `rate_limit:${socket.id}`;
-               const currentTime = Date.now();
+               //  block unauthenticated users
+               if (!socket.user) {
+                    return socket.emit('error', 'Login required');
+               }
 
+               //  rate limit 
+               const key = socket.user?.userId
+                    ? `rate_limit:${socket.user.userId}`
+                    : `rate_limit:${socket.id}`;
+
+               const currentTime = Date.now();
                const lastActionTime = await rateLimiter.get(key);
 
-               //  block if less than 1 second
                if (lastActionTime && currentTime - lastActionTime < 1000) {
-                    console.log(`Rate limit exceeded for socket ${socket.id}`);
                     return socket.emit('rate_limit_exceeded');
                }
 
-               // save current time 
                await rateLimiter.set(key, currentTime);
 
-               // update state in Redis
                const existingState = await Redis.get(CHECKBOX_KEY);
 
                let data = existingState
@@ -69,7 +81,6 @@ async function main() {
 
                await Redis.set(CHECKBOX_KEY, JSON.stringify(data));
 
-               //  publish event
                await publisher.publish(
                     'InternalUpdate',
                     JSON.stringify({ idx, checked })
@@ -79,7 +90,7 @@ async function main() {
      });
 
      app.get('/', (req, res) => {
-          res.sendFile(path.join(__dirname, 'index.html'));
+          res.sendFile(path.join(__dirname, '../public/index.html'));
      });
 
      app.get('/init', async (req, res) => {
@@ -90,7 +101,6 @@ async function main() {
           }
 
           const initialState = new Array(BOX_SIZE).fill(false);
-
           await Redis.set(CHECKBOX_KEY, JSON.stringify(initialState));
 
           res.json(initialState);
