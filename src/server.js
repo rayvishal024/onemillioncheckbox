@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { publisher, subscriber, Redis, rateLimiter } from '../redis-connection.js';
+import { publisher, subscriber, RedisClient, rateLimiter } from '../redis-connection.js';
 
 import { Server } from 'socket.io';
 import express from 'express';
@@ -32,8 +32,8 @@ async function main() {
      // auth middleware for socket.io
      io.use(authMiddleware);
 
-     const BOX_SIZE = 1000;
-     const CHECKBOX_KEY = 'checkbox1';
+     const BOX_SIZE = 2000;
+     const CHECKBOX_KEY = 'checkbox';
 
      // subscribe to Redis channel for updates
      await subscriber.subscribe('InternalUpdate');
@@ -71,7 +71,7 @@ async function main() {
 
                await rateLimiter.set(key, currentTime);
 
-               const existingState = await Redis.get(CHECKBOX_KEY);
+               const existingState = await RedisClient.get(CHECKBOX_KEY);
 
                let data = existingState
                     ? JSON.parse(existingState)
@@ -79,7 +79,7 @@ async function main() {
 
                data[idx] = checked;
 
-               await Redis.set(CHECKBOX_KEY, JSON.stringify(data));
+               await RedisClient.set(CHECKBOX_KEY, JSON.stringify(data));
 
                await publisher.publish(
                     'InternalUpdate',
@@ -94,14 +94,14 @@ async function main() {
      });
 
      app.get('/init', async (req, res) => {
-          const existingState = await Redis.get(CHECKBOX_KEY);
+          const existingState = await RedisClient.get(CHECKBOX_KEY);
 
           if (existingState) {
                return res.json(JSON.parse(existingState));
           }
 
           const initialState = new Array(BOX_SIZE).fill(false);
-          await Redis.set(CHECKBOX_KEY, JSON.stringify(initialState));
+          await RedisClient.set(CHECKBOX_KEY, JSON.stringify(initialState));
 
           res.json(initialState);
      });
